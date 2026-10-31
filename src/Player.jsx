@@ -5,21 +5,25 @@ import {Play,Pause,Volume2,VolumeX,Maximize,Minimize,Settings2,LoaderCircle,Aler
 const TEST_STREAM="https://sabconeta.cdn.mangomolo.com/sabc1/smil:sabc1.stream.smil/master.m3u8";
 function routeInfo(){
  const p=location.pathname.split("/").filter(Boolean);
- if(p[0]==="embed"&&p[1]==="tv") return {kind:"TV",id:p[2],season:p[3],episode:p[4]};
- if(p[0]==="embed"&&p[1]==="movie") return {kind:"MOVIE",id:p[2]};
+ if((p[0]==="embed"||p[0]==="")&&p[1]==="tv") return {kind:"TV",id:p[2],season:p[3],episode:p[4]};
+ if((p[0]==="embed"||p[0]==="")&&p[1]==="movie") return {kind:"MOVIE",id:p[2]};
+ if(p[0]==="tv") return {kind:"TV",id:p[1],season:p[2],episode:p[3]};
+ if(p[0]==="movie") return {kind:"MOVIE",id:p[1]};
  return {kind:"PREVIEW"};
 }
 export default function Player(){
  const video=useRef(null),shell=useRef(null),hls=useRef(null),hide=useRef(null);
  const route=useMemo(routeInfo,[]);
  const params=new URLSearchParams(location.search);
+ const isVidrockEmbed=(route.kind==="MOVIE"||route.kind==="TV")&&!params.get("src");
+ const vidrockUrl=route.kind==="MOVIE"?`https://vidrock.to/movie/${encodeURIComponent(route.id)}`:route.kind==="TV"?`https://vidrock.to/tv/${encodeURIComponent(route.id)}/${encodeURIComponent(route.season)}/${encodeURIComponent(route.episode)}`:"";
  const [src]=useState(params.get("src")||import.meta.env.VITE_TEST_STREAM||TEST_STREAM);
  const [title]=useState(params.get("title")||(route.kind==="PREVIEW"?"SABC1 · Live test":"Lumina"));
  const [playing,setPlaying]=useState(false),[muted,setMuted]=useState(false),[volume,setVolume]=useState(.8);
  const [time,setTime]=useState(0),[duration,setDuration]=useState(0),[status,setStatus]=useState("loading"),[error,setError]=useState("");
  const [levels,setLevels]=useState([]),[level,setLevel]=useState(-1),[menu,setMenu]=useState(false),[visible,setVisible]=useState(true),[fullscreen,setFullscreen]=useState(false);
  useEffect(()=>{
-  const v=video.current;if(!v||!src)return;
+  const v=video.current;if(isVidrockEmbed||!v||!src)return;
   setStatus("loading");setError("");
   let instance;
   if(Hls.isSupported()){
@@ -31,7 +35,7 @@ export default function Player(){
    v.src=src;v.onloadedmetadata=()=>setStatus("ready");v.onerror=()=>{setStatus("error");setError("The browser could not load this HLS stream.");};
   }else{setStatus("error");setError("HLS playback is not supported in this browser.");}
   return()=>{instance?.destroy();if(hls.current===instance)hls.current=null;v.pause();v.removeAttribute("src");v.load();};
- },[src]);
+ },[src,isVidrockEmbed]);
  useEffect(()=>{const v=video.current;if(!v)return;const t=()=>setTime(v.currentTime||0),d=()=>setDuration(Number.isFinite(v.duration)?v.duration:0);v.addEventListener("timeupdate",t);v.addEventListener("durationchange",d);return()=>{v.removeEventListener("timeupdate",t);v.removeEventListener("durationchange",d)}},[]);
  useEffect(()=>{const f=()=>setFullscreen(!!document.fullscreenElement);document.addEventListener("fullscreenchange",f);return()=>document.removeEventListener("fullscreenchange",f)},[]);
  const reveal=()=>{setVisible(true);clearTimeout(hide.current);hide.current=setTimeout(()=>{if(video.current&&!video.current.paused)setVisible(false)},2800)};
@@ -40,12 +44,12 @@ export default function Player(){
  const seek=n=>{if(video.current&&duration)video.current.currentTime=Number(n)};
  const fs=async()=>{if(!document.fullscreenElement)await shell.current?.requestFullscreen?.();else await document.exitFullscreen?.()};
  return <main className="page"><section className="player" ref={shell} onMouseMove={reveal} onMouseLeave={()=>playing&&setVisible(false)} onTouchStart={reveal}>
-  <video ref={video} playsInline preload="metadata" onClick={play} onPlay={()=>{setPlaying(true);setStatus("ready")}} onPause={()=>setPlaying(false)} onWaiting={()=>setStatus("loading")} onPlaying={()=>setStatus("ready")}/>
-  <div className={`top ${visible?"show":"hide"}`}><div className="brand">LUMINA<span>.</span></div><div className="route">{route.kind}{route.id?` · ${route.id}`:""}{route.season?` · S${route.season} E${route.episode}`:""}</div></div>
-  {status==="loading"&&<div className="state"><LoaderCircle className="spin" size={34}/><span>Preparing your experience</span></div>}
-  {status==="error"&&<div className="state error"><AlertCircle size={32}/><b>Unable to play this source</b><span>{error}</span><button onClick={()=>{setStatus("loading");if(hls.current)hls.current.startLoad()}}>Try again</button></div>}
-  {status==="ready"&&!playing&&<button className="bigplay" onClick={play} aria-label="Play"><Play fill="currentColor"/></button>}
-  <div className={`controls ${visible?"show":"hide"}`}>
+  {isVidrockEmbed?<iframe className="external-player" src={vidrockUrl} title={`VidRock ${route.kind==="MOVIE"?"movie":"episode"} ${route.id}`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"/>:<video ref={video} playsInline preload="metadata" onClick={play} onPlay={()=>{setPlaying(true);setStatus("ready")}} onPause={()=>setPlaying(false)} onWaiting={()=>setStatus("loading")} onPlaying={()=>setStatus("ready")}/ >}
+  <div className={`top ${isVidrockEmbed||visible?"show":"hide"}`}><div className="brand">LUMINA<span>.</span></div><div className="route">{route.kind}{route.id?` · ${route.id}`:""}{route.season?` · S${route.season} E${route.episode}`:""}</div></div>
+  {!isVidrockEmbed&&status==="loading"&&<div className="state"><LoaderCircle className="spin" size={34}/><span>Preparing your experience</span></div>}
+  {!isVidrockEmbed&&status==="error"&&<div className="state error"><AlertCircle size={32}/><b>Unable to play this source</b><span>{error}</span><button onClick={()=>{setStatus("loading");if(hls.current)hls.current.startLoad()}}>Try again</button></div>}
+  {!isVidrockEmbed&&status==="ready"&&!playing&&<button className="bigplay" onClick={play} aria-label="Play"><Play fill="currentColor"/></button>}
+  {!isVidrockEmbed&&<div className={`controls ${visible?"show":"hide"}`}>
    <div className="now"><div><small>NOW PLAYING</small><strong>{title}</strong></div><span className="live"><i/> STREAM</span></div>
    <input className="seek" aria-label="Seek" type="range" min="0" max={duration||100} step=".1" value={Math.min(time,duration||100)} onChange={e=>seek(e.target.value)} style={{"--pct":`${duration?time/duration*100:0}%`}}/>
    <div className="times"><span>{fmt(time)}</span><span>{duration?fmt(duration):"LIVE"}</span></div>
@@ -60,6 +64,6 @@ export default function Player(){
     <button className="btn" title="Subtitle tracks depend on stream" aria-label="Subtitles"><Captions/></button>
     <button className="btn" onClick={fs} aria-label="Fullscreen">{fullscreen?<Minimize/>:<Maximize/>}</button>
    </div></div>
-  </div>
+  </div>}
  </section><footer><span className="footbrand">LUMINA<span>.</span></span><span>A quieter way to watch.</span></footer></main>
 }

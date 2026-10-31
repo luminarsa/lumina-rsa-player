@@ -11,8 +11,10 @@ npm run dev
 Root `/` is a player preview using the SABC1 HLS test URL supplied in the conversation.
 
 ## Embed routes
-- Movie: `/embed/movie/:tmdbId`
-- TV episode: `/embed/tv/:tmdbId/:season/:episode`
+- Movie: `/embed/movie/:tmdbId` (also `/movie/:tmdbId`)
+- TV episode: `/embed/tv/:tmdbId/:season/:episode` (also `/tv/:tmdbId/:season/:episode`)
+
+Movie and TV routes currently load the public VidRock iframe at `https://vidrock.to`. The iframe handles its own media selection and playback controls; Lumina does not extract or proxy VidRock's underlying stream URLs. The root route remains the SABC1 player preview, and adding `?src=` to a route uses the direct HLS test/custom-source player instead of the VidRock iframe.
 
 The current build is a player prototype. It does not scrape or resolve CB Providers sources. Replace the demo source with a backend endpoint that returns streams you are authorized to use.
 
